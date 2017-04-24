@@ -89,7 +89,7 @@ def featureFormat( dictionary, features, remove_NaN=True, remove_all_zeroes=Fals
         # Logic for deciding whether or not to add the data point.
         append = True
         # exclude 'poi' class as criteria.
-        if features[0] == 'E2E Satisfied':
+        if features[0] == 'Made Donation in March 2007':
             test_list = tmp_list[1:]
         else:
             test_list = tmp_list
