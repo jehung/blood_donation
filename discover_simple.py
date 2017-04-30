@@ -15,6 +15,7 @@ from sklearn import model_selection
 from sklearn.cross_validation import train_test_split
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import make_scorer, log_loss
+from sklearn.metrics import classification_report
 
 file_in = 'C:\\Users\\Jenny\\Documents\\Mathfreak_Data\\DataKind\\BloodDonation\\train.csv'
 
@@ -46,8 +47,9 @@ def model():
     numerical_features = ['Number of Donations', 'Months since First Donation', 'Months since Last Donation', 'if']
     from sklearn.preprocessing import PolynomialFeatures
     X_x = PolynomialFeatures(2).fit_transform(X)
-    print('final check', X_x.shape)
+    print('X_x', X_x.shape)
     X_train, X_test, y_train, y_test = train_test_split(X_x, y, test_size=0.2)
+    print('X_train', X_train.shape)
     X_train1, X_val, y_train1, y_val = train_test_split(X_train, y_train, test_size=0.2)
     logit = LogisticRegression(solver='liblinear')
     #cv = model_selection.KFold(n_splits=200, shuffle=True)
@@ -63,22 +65,51 @@ def model():
 
     score_func = make_scorer(log_loss, greater_is_better=False, needs_proba=True)
 
-    #clf = GridSearchCV(logit,
-    #                   scoring='accuracy',
-    #                   cv=sss,
-    #                   param_grid=param_grid)
+    scores = [score_func, 'neg_log_loss', 'f1', 'precision', 'recall']
 
-    searchCV = LogisticRegressionCV(
-        Cs=list(np.power(10.0, np.arange(-10, 10)))
-        ,penalty='l1'
-        ,scoring=score_func
-        ,cv=sss
-        ,random_state=787
-        ,max_iter=10000
-        ,fit_intercept=True
-        ,solver='liblinear'
-        ,tol=1e-4
-    )
+    for score in scores:
+        print("# Tuning hyper-parameters for %s" % score)
+        print()
+
+        clf = GridSearchCV(logit,
+                           scoring=score,
+                           cv=sss,
+                           param_grid=param_grid)
+        clf.fit(X_train, y_train)
+
+        print("Best parameters set found on development set:")
+        print()
+        print(clf.best_params_)
+        print()
+        print("Grid scores on development set:")
+        print()
+        means = clf.cv_results_['mean_test_score']
+        stds = clf.cv_results_['std_test_score']
+        for mean, std, params in zip(means, stds, clf.cv_results_['params']):
+            print("%0.3f (+/-%0.03f) for %r"
+                  % (mean, std * 2, params))
+        print()
+
+        print("Detailed classification report:")
+        print()
+        print("The model is trained on the full development set.")
+        print("The scores are computed on the full evaluation set.")
+        print()
+        y_true, y_pred = y_test, clf.predict(X_test)
+        print(classification_report(y_true, y_pred))
+        print()
+
+    #searchCV = LogisticRegressionCV(
+    #    Cs=list(np.power(10.0, np.arange(-10, 10)))
+    #    ,penalty='l1'
+    #    ,scoring=score_func
+    #    ,cv=sss
+    #    ,random_state=787
+    #    ,max_iter=10000
+    #    ,fit_intercept=True
+    #    ,solver='liblinear'
+    #    ,tol=1e-4
+    #)
 
 
     searchCV.fit(X_train,y_train)
