@@ -65,33 +65,34 @@ def gridSearch_models(data):
     
     
     logit = LogisticRegression(random_state=42)
-    forest = RandomForestClassifier(random_state=43)
+    #forest = RandomForestClassifier(random_state=43)
     svc = SVC(probability=True)
     dt = DecisionTreeClassifier(max_features="auto")
-    mlp = MLPClassifier(activation='logistic')
+    #mlp = MLPClassifier(activation='logistic')
     
 
     # Creating a feature-selection-classifier pipeline
 
     params = {
         'clf1_pipe__sfs__k_features': [2, 3, 4],
-        'clf1_pipe__logit__C': list(np.power(3.0, np.arange(-7, 7))),
+        'clf1_pipe__logit__C': list(np.power(3.0, np.arange(-5, 5))),
         'clf1_pipe__logit__penalty': ['l1', 'l2'],
         'clf1_pipe__logit__fit_intercept': [True, False],
         'svc__kernel': ['linear', 'rbf', 'sigmoid'],
-        'svc__C': list(np.power(3.0, np.arange(-15, -5))),
-        'svc__gamma': list(np.power(3.0, np.arange(-15, -5))),
+        'svc__C': list(np.power(3.0, np.arange(-10, -5))),
+        'svc__gamma': list(np.power(3.0, np.arange(-10, -5))),
         'svc__class_weight': [None, 'balanced'],
-        'mlp__activation': ['logistic', 'tanh'],
-        'mlp__solver': ['sgd', 'adam'],
-        'mlp__learning_rate': ['invscaling', 'adaptive'],
-        'mlp__learning_rate_init': [0.001, 0.003, 0.009, 0.03, 0.09, 0.3, 0.9, 1.5],
-        'forest__n_estimators': [10, 20, 50, 70, 100, 120, 150],
-        'forest__max_features': ['auto', 'log2', 0.1, 0.3, 0.5, 0.7, 0.9, None],
-        'forest__criterion': ['gini', 'entropy'],
+        #'mlp__activation': ['logistic', 'tanh'],
+        #'mlp__solver': ['sgd', 'adam'],
+        #'mlp__learning_rate': ['invscaling', 'adaptive'],
+        #'mlp__learning_rate_init': [0.001, 0.003, 0.009, 0.03, 0.09, 0.3, 0.9, 1.5],
+        #'forest__n_estimators': [10, 20, 50, 70, 100, 120, 150],
+        #'forest__max_features': ['auto', 'log2', 0.1, 0.3, 0.5, 0.7, 0.9, None],
+        #'forest__criterion': ['gini', 'entropy'],
         'dt__min_samples_split': [5, 10, 15, 20, 25, 35, 50],
         'dt__max_depth': [3, 4, 5, 6, 7],
-        'dt__class_weight': [None, 'balanced']}
+        'dt__class_weight': [None, 'balanced']
+        }
 
     
     sfs1 = SequentialFeatureSelector(logit, 
@@ -100,16 +101,16 @@ def gridSearch_models(data):
                                      floating=False, 
                                      scoring='neg_log_loss',
                                      verbose=0,
-                                     cv=20)
+                                     cv=3)
 
     clf1_pipe = Pipeline([('sfs', sfs1), ('logit', logit)])
     
     eclf = VotingClassifier(estimators=[('clf1_pipe', clf1_pipe), 
-                                        ('svc', svc), ('forest', forest), ('dt', dt), ('mlp', mlp)], 
-                                        weights=[1, 1, 1,1, 1], voting='soft')
+                                        ('svc', svc), ('dt', dt)], 
+                                        weights=[1, 1, 1], voting='soft')
     
     
-    grid = GridSearchCV(estimator=eclf, param_grid=params, cv=20, scoring='neg_log_loss', n_jobs=-1, verbose=3)
+    grid = GridSearchCV(estimator=eclf, param_grid=params, cv=3, scoring='neg_log_loss', n_jobs=-1, verbose=3)
     grid.fit(X_x1, y)
     
     
