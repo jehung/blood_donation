@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
 
@@ -10,7 +9,7 @@ test_file = 'C:\\Users\\Jenny\\Documents\\Mathfreak_Data\\DataKind\\BloodDonatio
 data = pd.read_csv(file_in)
 test = pd.read_csv(test_file)
 
-batch_size = 1
+batch_size = 50
 num_steps = 30001
 regul_param = 0.003
 numerical_features = ['Number of Donations', 'Months since First Donation', 'Months since Last Donation',
@@ -46,8 +45,11 @@ def accuracy(predictions, labels):
 data = make_feature(data)
 y = data['Made Donation in March 2007'].astype('float32')
 y = (np.arange(2) == y[:,None]).astype(np.float32)
+print('y', y)
 X = data.loc[:, numerical_features].astype('float32')
-test_X = np.asarray(make_feature(test).astype('float32'))
+
+test_X = make_feature(test)
+test = test_X.loc[:, numerical_features].astype('float32')
 
 
 train_dataset, train_labels = randomize(X, y)
@@ -55,31 +57,37 @@ train_dataset, train_labels = randomize(X, y)
 
 
 valid_size = 200
-test_size = 100
+
 
 valid_dataset = np.asarray(train_dataset)[:valid_size,:]
 valid_labels = np.asarray(train_labels)[:valid_size,:]
-train_dataset = np.asarray(train_dataset)[valid_size:-1*test_size,:]
-train_labels = np.asarray(train_labels)[valid_size:-1*test_size,:]
-test_dataset = np.asarray(train_dataset)[-1*test_size:,:]
-test_labels = np.asarray(train_labels)[-1*test_size:,:]
+train_dataset = np.asarray(train_dataset)[valid_size:,:]
+train_labels = np.asarray(train_labels)[valid_size:,:]
+all_train = np.asarray(train_dataset)
+all_train_labels = np.asarray(train_labels)
+final_test = np.asarray(test)
 print('Training', train_dataset.shape, train_labels.shape)
 print('Validation', valid_dataset.shape, valid_labels.shape)
-print('Test', test_dataset.shape, test_labels.shape)
+print('Final Test', final_test.shape, final_test.shape)
 
 
-batch_size = 50
-#regul_param = 0.003
+batch_size = 200
+regul_param = 0.003
 hidden_nodes = 1024
 
 graph = tf.Graph()
 with graph.as_default():
-
+    global_step = tf.Variable(0, trainable=False)
+    starter_learning_rate = 0.001
+    learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+                                               50, 0.96, staircase=True)
     # Input data. For the training data, we use a placeholder that will be fed at run time with a training minibatch.
     tf_train_dataset = tf.placeholder(tf.float32, shape=(batch_size, len(numerical_features))) # ONLY DIFF FOR SGD
     tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, 2)) # ONLY DIFF FOR SGD
     tf_valid_dataset = tf.constant(valid_dataset)
-    tf_test_dataset = tf.constant(test_dataset)
+    all_train = tf.constant(all_train)
+    all_train_labels = tf.constant(all_train_labels)
+    tf_test_dataset = tf.constant(final_test)
 
     # Variables.
     weights_1 = tf.Variable(tf.truncated_normal([len(numerical_features), hidden_nodes]))
@@ -96,7 +104,11 @@ with graph.as_default():
 
     def forward_prop(inp):
         h1 = tf.nn.relu(tf.matmul(inp, weights_1) + biases_1)
-        return tf.matmul(h1,weights_2) + biases_2
+        h2 = tf.nn.relu(tf.matmul(h1, weights_2) + biases_2)
+        return tf.matmul(h2,weights_3) + biases_3
+
+    def lof_loss(labels, softmax):
+        return -1*(labels * softmax).sum()
 
     # Training computation.
     logits = forward_prop_dropOut(tf_train_dataset)
@@ -105,18 +117,20 @@ with graph.as_default():
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels)) + regul_term
     #loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
 
-    # Optimizer.
-    optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
-
     # Predictions for the training, validation, and test data.
     #train_prediction = tf.nn.softmax(logits)
-    train_prediction = tf.nn.softmax(forward_prop(tf_train_dataset))
-    valid_prediction = tf.nn.softmax(forward_prop(tf_valid_dataset))
-    test_prediction = tf.nn.softmax(forward_prop(tf_test_dataset))
+    train_prediction = tf.nn.softmax(forward_prop_dropOut(tf_train_dataset))
+    valid_prediction = tf.nn.softmax(forward_prop_dropOut(tf_valid_dataset))
+    final_test_prediction = tf.nn.softmax(forward_prop(tf_test_dataset))
+    log_loss = -1*tf.reduce_mean(tf_train_labels*train_prediction)
+
+    # Optimizer.
+    # optimizer = tf.train.GradientDescentOptimizer(0.5).minimize(loss)
+    optimizer = (tf.train.GradientDescentOptimizer(learning_rate).minimize(loss))
 
 
 num_steps = 3001
-data = np.ndarray(shape=(1+num_steps//100,4), dtype=np.float32)
+data = np.ndarray(shape=(1+num_steps//100,3), dtype=np.float32)
 
 with tf.Session(graph=graph) as session:
     tf.initialize_all_variables().run()
@@ -133,15 +147,25 @@ with tf.Session(graph=graph) as session:
         # and the value is the numpy array to feed to it.
         feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels}
         _, l, predictions = session.run([optimizer, loss, train_prediction], feed_dict=feed_dict)
-        if (step % 100 == 0):
+        if (step % 50 == 0):
             batch_score = accuracy(predictions, batch_labels)
+            batch_loss = tf.contrib.losses.log_loss(tf_train_labels, train_prediction)
             valid_score = accuracy(valid_prediction.eval(), valid_labels)
-            test_score = accuracy(test_prediction.eval(), test_labels)
-            data[step//100,:] = [step*batch_size, batch_score/100, valid_score/100, test_score/100]
+            #valid_loss = tf.contrib.losses.log_loss(valid_labels, valid_prediction)
+            data[step//100,:] = [step*batch_size, batch_score/100, valid_score/100]
             print("Minibatch loss at step %d: %f" % (step, l))
             print("Minibatch accuracy: %.1f%%" % batch_score)
             print("Validation accuracy: %.1f%%" % valid_score)
-    print("Test accuracy: %.1f%%" % test_score)
+
+
+
+    ## Submission
+    final_test_prediction = tf.nn.softmax(forward_prop(final_test))
+    feed_dict = {tf_train_dataset: final_test}
+    classification = final_test_prediction.eval(feed_dict)
+    print(classification)
+
+
 
 
 fig, ax = plt.subplots()
@@ -155,39 +179,4 @@ ax.grid()
 plt.show()
 
 
-
-
-# Network Parameters
-n_hidden_1 = 3  # 1st layer number of features
-n_hidden_2 = 3  # 2nd layer number of features
-n_input = 4  # MNIST data input (img shape: 28*28)
-n_classes = 2
-
-# tf Graph input
-x = tf.placeholder("float", [None, n_input])
-y = tf.placeholder("float", [None, n_classes])
-
-
-def multilayer_perceptron(x, weights, biases):
-    # Hidden layer with ReLU activation
-    layer_1 = tf.add(tf.matmul(X, weights['h1']), biases['b1'])
-    layer_1 = tf.nn.relu(layer_1)
-    # Hidden layer with ReLU activation
-    layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
-    layer_2 = tf.nn.relu(layer_2)
-    # Output layer with linear activation
-    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
-    return out_layer
-
-# Store layers weight &amp; bias
-weights = {
-    'h1': tf.Variable(tf.random_normal([n_input, n_hidden_1])),
-    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes]))
-}
-biases = {
-    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
-    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
-    'out': tf.Variable(tf.random_normal([n_classes]))
-}
 
