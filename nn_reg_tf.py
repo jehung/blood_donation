@@ -11,7 +11,7 @@ test = pd.read_csv(test_file)
 
 batch_size = 50
 num_steps = 30001
-regul_param = 0.003
+regul_param = 0
 numerical_features = ['Number of Donations', 'Months since First Donation', 'Months since Last Donation',
                        'If']
 
@@ -72,13 +72,12 @@ print('Final Test', final_test.shape, final_test.shape)
 
 
 batch_size = 200
-regul_param = 0.003
-hidden_nodes = 1024
+hidden_nodes = 5
 
 graph = tf.Graph()
 with graph.as_default():
     global_step = tf.Variable(0, trainable=False)
-    starter_learning_rate = 0.001
+    starter_learning_rate = 0.00001
     learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
                                                50, 0.96, staircase=True)
     # Input data. For the training data, we use a placeholder that will be fed at run time with a training minibatch.
@@ -129,7 +128,6 @@ with graph.as_default():
     optimizer = (tf.train.GradientDescentOptimizer(learning_rate).minimize(loss))
 
 
-num_steps = 3001
 data = np.ndarray(shape=(1+num_steps//100,3), dtype=np.float32)
 
 with tf.Session(graph=graph) as session:
@@ -162,8 +160,11 @@ with tf.Session(graph=graph) as session:
     ## Submission
     final_test_prediction = tf.nn.softmax(forward_prop(final_test))
     feed_dict = {tf_train_dataset: final_test}
-    classification = final_test_prediction.eval(feed_dict)
-    print(classification)
+    proba = final_test_prediction.eval(feed_dict)
+    print('proba', proba)
+    classification = session.run(tf.argmax(final_test_prediction, 1), feed_dict=feed_dict)
+    print('class', classification)
+
 
 
 
@@ -177,6 +178,5 @@ ax.set_xlabel('Training size')
 ax.set_ylim(0,1.01)
 ax.grid()
 plt.show()
-
 
 
