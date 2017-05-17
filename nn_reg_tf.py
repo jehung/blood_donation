@@ -10,7 +10,7 @@ data = pd.read_csv(file_in)
 test = pd.read_csv(test_file)
 
 batch_size = 50
-num_steps = 30001
+num_steps = 5001
 regul_param = 0
 numerical_features = ['Number of Donations', 'Months since First Donation', 'Months since Last Donation',
                        'If']
@@ -63,8 +63,6 @@ valid_dataset = np.asarray(train_dataset)[:valid_size,:]
 valid_labels = np.asarray(train_labels)[:valid_size,:]
 train_dataset = np.asarray(train_dataset)[valid_size:,:]
 train_labels = np.asarray(train_labels)[valid_size:,:]
-all_train = np.asarray(train_dataset)
-all_train_labels = np.asarray(train_labels)
 final_test = np.asarray(test)
 print('Training', train_dataset.shape, train_labels.shape)
 print('Validation', valid_dataset.shape, valid_labels.shape)
@@ -84,8 +82,6 @@ with graph.as_default():
     tf_train_dataset = tf.placeholder(tf.float32, shape=(batch_size, len(numerical_features))) # ONLY DIFF FOR SGD
     tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, 2)) # ONLY DIFF FOR SGD
     tf_valid_dataset = tf.constant(valid_dataset)
-    all_train = tf.constant(all_train)
-    all_train_labels = tf.constant(all_train_labels)
     tf_test_dataset = tf.constant(final_test)
 
     # Variables.
